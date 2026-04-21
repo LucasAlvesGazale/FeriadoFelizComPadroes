@@ -3,54 +3,69 @@ using System.Collections.Generic;
 
 namespace ProjetoCafeteria
 {
-    // Interface base para facilitar os próximos padrões, como Decorator
+    // INTERFACE BASE
     public interface IBebida
     {
         string GetDescricao();
         decimal GetPreco();
     }
 
-    // Bebidas concretas
+    // BEBIDAS
     public class Cafe : IBebida
     {
-        public string GetDescricao()
-        {
-            return "Café";
-        }
-
-        public decimal GetPreco()
-        {
-            return 5.00m;
-        }
+        public string GetDescricao() => "Café";
+        public decimal GetPreco() => 5.00m;
     }
 
     public class Cha : IBebida
     {
-        public string GetDescricao()
-        {
-            return "Chá";
-        }
-
-        public decimal GetPreco()
-        {
-            return 4.00m;
-        }
+        public string GetDescricao() => "Chá";
+        public decimal GetPreco() => 4.00m;
     }
 
     public class Cappuccino : IBebida
     {
+        public string GetDescricao() => "Cappuccino";
+        public decimal GetPreco() => 8.50m;
+    }
+
+    // PROXY
+    public class CappuccinoProxy : IBebida
+    {
+        private Cappuccino cappuccino;
+        private bool usuarioPremium;
+
+        public CappuccinoProxy(bool usuarioPremium)
+        {
+            this.usuarioPremium = usuarioPremium;
+        }
+
         public string GetDescricao()
         {
-            return "Cappuccino";
+            if (!usuarioPremium)
+                return "Acesso negado ao Cappuccino";
+
+            GarantirInstancia();
+            return cappuccino.GetDescricao();
         }
 
         public decimal GetPreco()
         {
-            return 8.50m;
+            if (!usuarioPremium)
+                return 0;
+
+            GarantirInstancia();
+            return cappuccino.GetPreco();
+        }
+
+        private void GarantirInstancia()
+        {
+            if (cappuccino == null)
+                cappuccino = new Cappuccino();
         }
     }
 
-    // Factory
+    // FACTORY
     public enum TipoBebida
     {
         Cafe,
@@ -60,7 +75,7 @@ namespace ProjetoCafeteria
 
     public static class BebidaFactory
     {
-        public static IBebida CriarBebida(TipoBebida tipo)
+        public static IBebida CriarBebida(TipoBebida tipo, bool premium = false)
         {
             switch (tipo)
             {
@@ -71,15 +86,39 @@ namespace ProjetoCafeteria
                     return new Cha();
 
                 case TipoBebida.Cappuccino:
-                    return new Cappuccino();
+                    return new CappuccinoProxy(premium);
 
                 default:
-                    throw new ArgumentException("Tipo de bebida inválido.");
+                    throw new ArgumentException("Tipo inválido");
             }
         }
     }
 
-    // Singleton
+    // ADAPTER
+    public class SistemaPagamentoExterno
+    {
+        public void RealizarPagamento(double valor)
+        {
+            Console.WriteLine("Pagamento externo: R$ " + valor);
+        }
+    }
+
+    public interface IPagamento
+    {
+        void Pagar(decimal valor);
+    }
+
+    public class PagamentoAdapter : IPagamento
+    {
+        private SistemaPagamentoExterno sistema = new SistemaPagamentoExterno();
+
+        public void Pagar(decimal valor)
+        {
+            sistema.RealizarPagamento((double)valor);
+        }
+    }
+
+    // SINGLETON
     public class SistemaCafeteria
     {
         private static SistemaCafeteria instancia;
@@ -99,9 +138,8 @@ namespace ProjetoCafeteria
                 lock (trava)
                 {
                     if (instancia == null)
-                    {
                         instancia = new SistemaCafeteria();
-                    }
+
                     return instancia;
                 }
             }
@@ -114,27 +152,46 @@ namespace ProjetoCafeteria
 
         public void MostrarPedidos()
         {
-            Console.WriteLine("Pedidos registrados:");
-            foreach (IBebida bebida in pedidos)
+            Console.WriteLine("Pedidos:");
+            foreach (var b in pedidos)
             {
-                Console.WriteLine("- " + bebida.GetDescricao() + " | R$ " + bebida.GetPreco());
+                Console.WriteLine("- " + b.GetDescricao() + " | R$ " + b.GetPreco());
             }
+        }
+
+        public void FinalizarPedidos(IPagamento pagamento)
+        {
+            decimal total = 0;
+
+            foreach (var b in pedidos)
+            {
+                total += b.GetPreco();
+            }
+
+            Console.WriteLine("Total: R$ " + total);
+            pagamento.Pagar(total);
         }
     }
 
+    // MAIN
     class Program
     {
         static void Main(string[] args)
         {
-            SistemaCafeteria sistema = SistemaCafeteria.Instancia;
+            var sistema = SistemaCafeteria.Instancia;
 
-            IBebida bebida1 = BebidaFactory.CriarBebida(TipoBebida.Cafe);
-            IBebida bebida2 = BebidaFactory.CriarBebida(TipoBebida.Cappuccino);
+            var b1 = BebidaFactory.CriarBebida(TipoBebida.Cafe);
+            var b2 = BebidaFactory.CriarBebida(TipoBebida.Cappuccino, false);
+            var b3 = BebidaFactory.CriarBebida(TipoBebida.Cappuccino, true);
 
-            sistema.AdicionarPedido(bebida1);
-            sistema.AdicionarPedido(bebida2);
+            sistema.AdicionarPedido(b1);
+            sistema.AdicionarPedido(b2);
+            sistema.AdicionarPedido(b3);
 
             sistema.MostrarPedidos();
+
+            IPagamento pagamento = new PagamentoAdapter();
+            sistema.FinalizarPedidos(pagamento);
         }
     }
 }
